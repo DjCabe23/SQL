@@ -34,6 +34,9 @@ create table empleados(
 
 create table reserva (
 	Id_reserva int not null auto_increment,
+    Id_paquete int,
+    Id_cliente int,
+    Id_empleado int,
     fechareserva date,
     numeroTelePersona varchar(50),
     estadoreserva varchar (50),
@@ -50,13 +53,14 @@ create table pagos(
 
 create table paqueteviaje(
 	Id_paquete int not null auto_increment,
+    Id_destino int,
     nombrepaquete varchar(100),
     duracion int not null,
     precio int not null,
     fechaInicio date,
     fechaFin date,
     primary key (Id_paquete)
-)
+);
 
 -- foreign key
 alter table paqueteviaje
@@ -71,6 +75,5 @@ add foreign key (Id_reserva) references reserva(Id_reserva);
 
 alter table reserva
 add foreign key (Id_empleado) references empleados(Id_empleados)
-
 
 
