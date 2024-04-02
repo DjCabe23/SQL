@@ -58,5 +58,19 @@ create table paqueteviaje(
     primary key (Id_paquete)
 )
 
+-- foreign key
+alter table paqueteviaje
+add foreign key (Id_destino) references destinos(Id_destino);
+
+alter table reserva
+add foreign key (Id_paquete) references paqueteviaje(Id_paquete),
+add foreign key (Id_cliente) references cliente(Id_cliente);
+
+alter table pagos 
+add foreign key (Id_reserva) references reserva(Id_reserva);
+
+alter table reserva
+add foreign key (Id_empleado) references empleados(Id_empleados)
+
 
 
