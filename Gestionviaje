@@ -1,5 +1,6 @@
 -- creacion de modelo 
 
+
 drop database gestionviaje;
 create database gestionviaje;
 use gestionviaje;
@@ -34,9 +35,9 @@ create table empleados(
 
 create table reserva (
 	Id_reserva int not null auto_increment,
-    Id_paquete int,
-    Id_cliente int,
-    Id_empleado int,
+    Id_paquete int not null,
+    Id_cliente int not null ,
+    Id_empleado int not null,
     fechareserva date,
     numeroTelePersona varchar(50),
     estadoreserva varchar (50),
@@ -53,7 +54,7 @@ create table pagos(
 
 create table paqueteviaje(
 	Id_paquete int not null auto_increment,
-    Id_destino int,
+    Id_destino int not null,
     nombrepaquete varchar(100),
     duracion int not null,
     precio int not null,
@@ -74,6 +75,34 @@ alter table pagos
 add foreign key (Id_reserva) references reserva(Id_reserva);
 
 alter table reserva
-add foreign key (Id_empleado) references empleados(Id_empleados)
+add foreign key (Id_empleado) references empleados(Id_empleados);
+
+
+CREATE VIEW Vista_Pago_Reserva AS
+SELECT p.*, r.*
+FROM pagos p
+INNER JOIN reserva r ON p.Id_reserva = r.Id_reserva;
+
+DELIMITER $$
+CREATE FUNCTION Calcular_Total_Reserva (reserva_id INT) RETURNS DECIMAL(10, 2) DETERMINISTIC
+BEGIN
+    DECLARE total DECIMAL(10, 2);
+    SELECT SUM(precio) INTO total FROM paqueteviaje WHERE Id_paquete = (SELECT Id_paquete FROM reserva WHERE Id_reserva = reserva_id);
+    RETURN total;
+END$$
+DELIMITER ;
+
+
+DELIMITER $$
+CREATE TRIGGER nuevo_pago_trigger AFTER INSERT ON pagos
+FOR EACH ROW
+BEGIN
+    DECLARE cliente_email VARCHAR(100);
+    SELECT correoElectronico INTO cliente_email FROM cliente WHERE Id_cliente = (SELECT Id_cliente FROM reserva WHERE Id_reserva = NEW.Id_reserva);
+    -- Lógica para enviar notificación por correo electrónico al cliente
+    -- REPLACE INTO codigo para enviar notificación
+END$$
+DELIMITER ;
+
 
 
