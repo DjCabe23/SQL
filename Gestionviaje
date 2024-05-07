@@ -1,12 +1,9 @@
 -- creacion de modelo 
 
-
 drop database gestionviaje;
 create database gestionviaje;
 use gestionviaje;
-
 -- Creaccion de objetos 
-
 create table cliente (
 	Id_cliente int not null auto_increment,
 	nombre varchar(50) not null,
@@ -16,14 +13,12 @@ create table cliente (
     correoElectronico varchar(30)not null,
     primary key (Id_cliente)
 );
-
 create table destinos(
 	Id_destino int not null auto_increment,
     nombreDestino varchar(100) not null,
     descripcion varchar (200) not null,
 	primary key (Id_destino)
 );
-
 create table empleados(
 	Id_empleados int not null auto_increment,
     nombre varchar(50) not null,
@@ -43,7 +38,6 @@ create table reserva (
     estadoreserva varchar (50),
     primary key (Id_reserva)
 );
-
 create table pagos(
 	Id_pago int not null auto_increment, 
     Id_reserva int not null,
@@ -62,47 +56,94 @@ create table paqueteviaje(
     fechaFin date,
     primary key (Id_paquete)
 );
-
 -- foreign key
 alter table paqueteviaje
 add foreign key (Id_destino) references destinos(Id_destino);
-
 alter table reserva
 add foreign key (Id_paquete) references paqueteviaje(Id_paquete),
 add foreign key (Id_cliente) references cliente(Id_cliente);
-
 alter table pagos 
 add foreign key (Id_reserva) references reserva(Id_reserva);
 
 alter table reserva
 add foreign key (Id_empleado) references empleados(Id_empleados);
 
-
-CREATE VIEW Vista_Pago_Reserva AS
-SELECT p.*, r.*
-FROM pagos p
-INNER JOIN reserva r ON p.Id_reserva = r.Id_reserva;
-
 DELIMITER $$
-CREATE FUNCTION Calcular_Total_Reserva (reserva_id INT) RETURNS DECIMAL(10, 2) DETERMINISTIC
-BEGIN
-    DECLARE total DECIMAL(10, 2);
-    SELECT SUM(precio) INTO total FROM paqueteviaje WHERE Id_paquete = (SELECT Id_paquete FROM reserva WHERE Id_reserva = reserva_id);
-    RETURN total;
-END$$
-DELIMITER ;
-
-
-DELIMITER $$
-CREATE TRIGGER nuevo_pago_trigger AFTER INSERT ON pagos
+CREATE TRIGGER before_insert_reserva
+BEFORE INSERT ON reserva
 FOR EACH ROW
 BEGIN
-    DECLARE cliente_email VARCHAR(100);
-    SELECT correoElectronico INTO cliente_email FROM cliente WHERE Id_cliente = (SELECT Id_cliente FROM reserva WHERE Id_reserva = NEW.Id_reserva);
-    -- Lógica para enviar notificación por correo electrónico al cliente
-    -- REPLACE INTO codigo para enviar notificación
+    IF NEW.fechareserva < CURDATE() THEN
+        SET NEW.estadoreserva = 'Expirada';
+    ELSE
+        SET NEW.estadoreserva = 'Pendiente';
+    END IF;
 END$$
 DELIMITER ;
+
+DELIMITER $$
+CREATE TRIGGER after_insert_pagos
+AFTER INSERT ON pagos
+FOR EACH ROW
+BEGIN
+    UPDATE reserva
+    SET estadoreserva = 'Pagada'
+    WHERE Id_reserva = NEW.Id_reserva;
+END$$
+DELIMITER ;
+
+
+DELIMITER $$
+CREATE TRIGGER before_update_reserva
+BEFORE UPDATE ON reserva
+FOR EACH ROW
+BEGIN
+    IF NEW.fechareserva < CURDATE() THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'La fecha de reserva no puede ser anterior a la fecha actual';
+    END IF;
+END$$
+DELIMITER ;
+
+DELIMITER $$
+CREATE FUNCTION CalcularDuracionPaquete(fechaInicio DATE, fechaFin DATE) RETURNS INT
+DETERMINISTIC
+BEGIN
+    DECLARE duracion INT;
+    SET duracion = DATEDIFF(fechaFin, fechaInicio) + 1;
+    RETURN duracion;
+END
+$$
+DELIMITER ;
+
+
+CREATE VIEW DetallesReservasActivas AS
+SELECT r.Id_reserva, r.fechareserva, r.numeroTelePersona, r.estadoreserva,
+       c.nombre AS nombre_cliente, c.apellido AS apellido_cliente,
+       p.nombrepaquete, p.duracion, p.precio
+FROM reserva r
+INNER JOIN cliente c ON r.Id_cliente = c.Id_cliente
+INNER JOIN paqueteviaje p ON r.Id_paquete = p.Id_paquete
+WHERE r.estadoreserva = 'Pendiente';
+
+
+CREATE VIEW ReservasExpiradas AS
+SELECT r.Id_reserva, r.fechareserva, r.numeroTelePersona, r.estadoreserva,
+       c.nombre AS nombre_cliente, c.apellido AS apellido_cliente,
+       p.nombrepaquete, p.duracion, p.precio
+FROM reserva r
+INNER JOIN cliente c ON r.Id_cliente = c.Id_cliente
+INNER JOIN paqueteviaje p ON r.Id_paquete = p.Id_paquete
+WHERE r.estadoreserva = 'Expirada';
+
+CREATE VIEW PagosPendientes AS
+SELECT r.Id_reserva, r.fechareserva, r.numeroTelePersona, r.estadoreserva,
+       c.nombre AS nombre_cliente, c.apellido AS apellido_cliente,
+       p.nombrepaquete, p.duracion, p.precio
+FROM reserva r
+INNER JOIN cliente c ON r.Id_cliente = c.Id_cliente
+INNER JOIN paqueteviaje p ON r.Id_paquete = p.Id_paquete
+WHERE r.estadoreserva = 'Pendiente';
 
 
 
