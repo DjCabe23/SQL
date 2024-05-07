@@ -68,6 +68,8 @@ add foreign key (Id_reserva) references reserva(Id_reserva);
 alter table reserva
 add foreign key (Id_empleado) references empleados(Id_empleados);
 
+-- trigger
+
 DELIMITER $$
 CREATE TRIGGER before_insert_reserva
 BEFORE INSERT ON reserva
@@ -105,6 +107,10 @@ BEGIN
 END$$
 DELIMITER ;
 
+
+
+
+---- funciones
 DELIMITER $$
 CREATE FUNCTION CalcularDuracionPaquete(fechaInicio DATE, fechaFin DATE) RETURNS INT
 DETERMINISTIC
@@ -116,7 +122,7 @@ END
 $$
 DELIMITER ;
 
-
+-- vistas
 CREATE VIEW DetallesReservasActivas AS
 SELECT r.Id_reserva, r.fechareserva, r.numeroTelePersona, r.estadoreserva,
        c.nombre AS nombre_cliente, c.apellido AS apellido_cliente,
