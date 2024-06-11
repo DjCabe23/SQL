@@ -3,6 +3,7 @@
 drop database gestionviaje;
 create database gestionviaje;
 use gestionviaje;
+
 -- Creaccion de objetos 
 create table cliente (
 	Id_cliente int not null auto_increment,
@@ -56,7 +57,85 @@ create table paqueteviaje(
     fechaFin date,
     primary key (Id_paquete)
 );
--- foreign key
+
+CREATE TABLE transportes (
+    Id_transporte INT NOT NULL AUTO_INCREMENT,
+    tipo VARCHAR(50) NOT NULL,
+    capacidad INT NOT NULL,
+    primary key (Id_transporte)
+);
+
+CREATE TABLE hoteles (
+    Id_hotel INT NOT NULL AUTO_INCREMENT,
+    nombre VARCHAR(100) NOT NULL,
+    direccion VARCHAR(100) NOT NULL,
+    telefono VARCHAR(20) NOT NULL,
+    primary key (Id_hotel)
+);
+
+CREATE TABLE paquetetransportes (
+    Id_paquete INT NOT NULL,
+    Id_transporte INT NOT NULL,
+    PRIMARY KEY (Id_paquete, Id_transporte),
+    FOREIGN KEY (Id_paquete) REFERENCES paqueteviaje(Id_paquete),
+    FOREIGN KEY (Id_transporte) REFERENCES transportes(Id_transporte)
+);
+
+CREATE TABLE paquetehoteles (
+    Id_paquete INT NOT NULL,
+    Id_hotel INT NOT NULL,
+    PRIMARY KEY (Id_paquete, Id_hotel),
+    FOREIGN KEY (Id_paquete) REFERENCES paqueteviaje(Id_paquete),
+    FOREIGN KEY (Id_hotel) REFERENCES hoteles(Id_hotel)
+);
+
+CREATE TABLE tourguides (
+    Id_tourguide INT NOT NULL AUTO_INCREMENT,
+    nombre VARCHAR(50) NOT NULL,
+    apellido VARCHAR(50) NOT NULL,
+    primary key (Id_tourguide)
+);
+
+CREATE TABLE paquetetourguides (
+    Id_paquete INT NOT NULL,
+    Id_tourguide INT NOT NULL,
+    PRIMARY KEY (Id_paquete, Id_tourguide),
+    FOREIGN KEY (Id_paquete) REFERENCES paqueteviaje(Id_paquete),
+    FOREIGN KEY (Id_tourguide) REFERENCES tourguides(Id_tourguide)
+);
+
+CREATE TABLE agencias (
+    Id_agencia INT NOT NULL AUTO_INCREMENT,
+    nombre VARCHAR(100) NOT NULL,
+    direccion VARCHAR(100) NOT NULL,
+    telefono VARCHAR(20) NOT NULL,
+    primary key (Id_agencia)
+);
+
+CREATE TABLE paqueteagencias (
+    Id_paquete INT NOT NULL,
+    Id_agencia INT NOT NULL,
+    PRIMARY KEY (Id_paquete, Id_agencia),
+    FOREIGN KEY (Id_paquete) REFERENCES paqueteviaje(Id_paquete),
+    FOREIGN KEY (Id_agencia) REFERENCES agencias(Id_agencia)
+);
+
+CREATE TABLE promociones (
+    Id_promocion INT NOT NULL AUTO_INCREMENT,
+    descripcion VARCHAR(200) NOT NULL,
+    descuento INT NOT NULL,
+    primary key (Id_promocion)
+);
+
+CREATE TABLE paquetepromociones (
+    Id_paquete INT NOT NULL,
+    Id_promocion INT NOT NULL,
+    PRIMARY KEY (Id_paquete, Id_promocion),
+    FOREIGN KEY (Id_paquete) REFERENCES paqueteviaje(Id_paquete),
+    FOREIGN KEY (Id_promocion) REFERENCES promociones(Id_promocion)
+);
+
+-- foreign key ---------
 alter table paqueteviaje
 add foreign key (Id_destino) references destinos(Id_destino);
 alter table reserva
@@ -68,7 +147,7 @@ add foreign key (Id_reserva) references reserva(Id_reserva);
 alter table reserva
 add foreign key (Id_empleado) references empleados(Id_empleados);
 
--- trigger
+-- trigger -------------
 
 DELIMITER $$
 CREATE TRIGGER before_insert_reserva
@@ -107,10 +186,33 @@ BEGIN
 END$$
 DELIMITER ;
 
+DELIMITER $$
+CREATE TRIGGER before_update_paquete
+BEFORE UPDATE ON paqueteviaje
+FOR EACH ROW
+BEGIN
+    IF NEW.precio < 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'El precio del paquete no puede ser negativo';
+    END IF;
+END$$
+DELIMITER ;
+
+DELIMITER $$
+CREATE TRIGGER after_delete_paquete
+AFTER DELETE ON paqueteviaje
+FOR EACH ROW
+BEGIN
+    DELETE FROM paquetetransportes WHERE Id_paquete = OLD.Id_paquete;
+    DELETE FROM paquetehoteles WHERE Id_paquete = OLD.Id_paquete;
+    DELETE FROM paquetetourguides WHERE Id_paquete = OLD.Id_paquete;
+    DELETE FROM paqueteagencias WHERE Id_paquete = OLD.Id_paquete;
+    DELETE FROM paquetepromociones WHERE Id_paquete = OLD.Id_paquete;
+END$$
+DELIMITER ;
 
 
-
----- funciones
+-- funciones
 DELIMITER $$
 CREATE FUNCTION CalcularDuracionPaquete(fechaInicio DATE, fechaFin DATE) RETURNS INT
 DETERMINISTIC
@@ -122,7 +224,28 @@ END
 $$
 DELIMITER ;
 
--- vistas
+DELIMITER $$
+CREATE FUNCTION TotalPagosCliente(Id_cliente INT) RETURNS DECIMAL(10, 2)
+DETERMINISTIC
+BEGIN
+    DECLARE total DECIMAL(10, 2);
+    
+    SELECT SUM(p.metodoPago)
+    INTO total
+    FROM pagos p
+    INNER JOIN reserva r ON p.Id_reserva = r.Id_reserva
+    WHERE r.Id_cliente = Id_cliente;
+    
+    IF total IS NULL THEN
+        SET total = 0.00;
+    END IF;
+    
+    RETURN total;
+END$$
+DELIMITER ;
+
+
+-- vistas--------
 CREATE VIEW DetallesReservasActivas AS
 SELECT r.Id_reserva, r.fechareserva, r.numeroTelePersona, r.estadoreserva,
        c.nombre AS nombre_cliente, c.apellido AS apellido_cliente,
@@ -150,6 +273,131 @@ FROM reserva r
 INNER JOIN cliente c ON r.Id_cliente = c.Id_cliente
 INNER JOIN paqueteviaje p ON r.Id_paquete = p.Id_paquete
 WHERE r.estadoreserva = 'Pendiente';
+
+CREATE VIEW PaquetesConTransporte AS
+SELECT pv.Id_paquete, pv.nombrepaquete, t.tipo AS tipo_transporte
+FROM paqueteviaje pv
+INNER JOIN paquetetransportes pt ON pv.Id_paquete = pt.Id_paquete
+INNER JOIN transportes t ON pt.Id_transporte = t.Id_transporte;
+
+CREATE VIEW PaquetesConHoteles AS
+SELECT pv.Id_paquete, pv.nombrepaquete, h.nombre AS nombre_hotel
+FROM paqueteviaje pv
+INNER JOIN paquetehoteles ph ON pv.Id_paquete = ph.Id_paquete
+INNER JOIN hoteles h ON ph.Id_hotel = h.Id_hotel;
+
+
+-- Datos tablas
+INSERT INTO cliente (nombre, apellido, direccion, telefono, correoElectronico)
+VALUES 
+('Juan', 'Pérez', 'Calle Falsa 123', '555-1234', 'juan.perez@example.com'),
+('Ana', 'Gómez', 'Av. Siempre Viva 456', '555-5678', 'ana.gomez@example.com'),
+('Luis', 'Martínez', 'Calle 123', '555-8765', 'luis.martinez@example.com');
+
+
+INSERT INTO destinos (nombreDestino, descripcion)
+VALUES 
+('Playa del Carmen', 'Un destino turístico en la Riviera Maya'),
+('Machu Picchu', 'Ciudadela inca ubicada en Perú'),
+('París', 'La capital de Francia, conocida como la Ciudad de la Luz');
+
+
+INSERT INTO empleados (nombre, apellido, salario, fechanacimiento)
+VALUES 
+('Carlos', 'Ramírez', '3000', '1985-04-10'),
+('Marta', 'López', '3500', '1990-07-25'),
+('Pedro', 'González', '2800', '1992-11-14');
+
+
+INSERT INTO paqueteviaje (Id_destino, nombrepaquete, duracion, precio, fechaInicio, fechaFin)
+VALUES 
+(1, 'Paquete Playa del Carmen', 7, 1500, '2024-06-10', '2024-06-17'),
+(2, 'Paquete Machu Picchu', 5, 1800, '2024-07-01', '2024-07-06'),
+(3, 'Paquete París', 10, 2500, '2024-08-15', '2024-08-25');
+
+
+INSERT INTO reserva (Id_paquete, Id_cliente, Id_empleado, fechareserva, numeroTelePersona, estadoreserva)
+VALUES 
+(1, 1, 1, '2024-06-10', '555-1234', 'Pendiente'),
+(2, 2, 2, '2024-06-15', '555-5678', 'Pendiente'),
+(3, 3, 3, '2024-06-20', '555-8765', 'Pendiente');
+
+
+INSERT INTO pagos (Id_reserva, metodoPago, fechaPago)
+VALUES 
+(1, 'Tarjeta de Crédito', '2024-05-16'),
+(2, 'PayPal', '2024-05-21'),
+(3, 'Transferencia Bancaria', '2024-05-26');
+
+
+INSERT INTO transportes (tipo, capacidad)
+VALUES 
+('Autobús', 50),
+('Avión', 200),
+('Barco', 100);
+
+
+INSERT INTO hoteles (nombre, direccion, telefono)
+VALUES 
+('Hotel Playa', 'Calle Playa 123', '555-1122'),
+('Hotel Montaña', 'Calle Montaña 456', '555-3344'),
+('Hotel Ciudad', 'Calle Ciudad 789', '555-5566');
+
+
+INSERT INTO paquetetransportes (Id_paquete, Id_transporte)
+VALUES 
+(1, 1),
+(2, 2),
+(3, 3);
+
+
+INSERT INTO paquetehoteles (Id_paquete, Id_hotel)
+VALUES 
+(1, 1),
+(2, 2),
+(3, 3);
+
+
+INSERT INTO tourguides (nombre, apellido)
+VALUES 
+('Laura', 'Fernández'),
+('Roberto', 'Méndez'),
+('Carmen', 'Ríos');
+
+
+INSERT INTO paquetetourguides (Id_paquete, Id_tourguide)
+VALUES 
+(1, 1),
+(2, 2),
+(3, 3);
+
+
+INSERT INTO agencias (nombre, direccion, telefono)
+VALUES 
+('Agencia Viajes ABC', 'Calle Agencia 123', '555-7788'),
+('Agencia Mundo', 'Av. Mundo 456', '555-8899'),
+('Agencia Sol', 'Calle Sol 789', '555-9900');
+
+
+INSERT INTO paqueteagencias (Id_paquete, Id_agencia)
+VALUES 
+(1, 1),
+(2, 2),
+(3, 3);
+
+
+INSERT INTO promociones (descripcion, descuento)
+VALUES 
+('Descuento Verano', 10),
+('Descuento Invierno', 15),
+('Descuento Primavera', 20);
+
+
+INSERT INTO paquetepromociones (Id_paquete, Id_promocion)
+VALUES 
+(1, 1),
+(2, 2),
+(3, 3);
 
 
 
